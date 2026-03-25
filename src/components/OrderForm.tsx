@@ -92,7 +92,7 @@ export function OrderForm() {
       `Mohon konfirmasi ketersediaannya. Terima kasih!`;
     
     const encodedMessage = encodeURIComponent(message);
-    const phoneNumber = "6285117425840";
+    const phoneNumber = "6285264191991";
     
     window.open(`https://wa.me/${phoneNumber}?text=${encodedMessage}`, '_blank');
   };
