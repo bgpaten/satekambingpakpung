@@ -8,26 +8,32 @@ const AppInstallPopup: React.FC = () => {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
 
   useEffect(() => {
-    // Check if already shown in this session or visited before
-    const isFirstVisit = !localStorage.getItem('visited_before');
     const hasBeenDismissed = localStorage.getItem('install_popup_dismissed');
+    if (hasBeenDismissed) return;
 
-    if (isFirstVisit && !hasBeenDismissed) {
-      // Show after a short delay
-      const timer = setTimeout(() => setShow(true), 3000);
-      localStorage.setItem('visited_before', 'true');
-      return () => clearTimeout(timer);
-    }
-
-    // Listen for PWA install prompt
     const handleBeforeInstallPrompt = (e: any) => {
       e.preventDefault();
       setDeferredPrompt(e);
-      // We could show the popup here instead of on first visit if preferred
+      // Show popup immediately when browser identifies it as installable
+      setShow(true);
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-    return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    // Fallback: Show after a short delay for branding/education if not already shown
+    const isFirstVisit = !localStorage.getItem('visited_before');
+    let timer: any;
+    if (isFirstVisit) {
+      timer = setTimeout(() => {
+        setShow(true);
+        localStorage.setItem('visited_before', 'true');
+      }, 5000);
+    }
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      if (timer) clearTimeout(timer);
+    };
   }, []);
 
   const handleDismiss = () => {
