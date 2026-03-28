@@ -57,12 +57,29 @@ export function useOrders() {
           setOrders(current => current.filter(o => o.id === payload.old.id));
         }
       })
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'CHANNEL_ERROR') {
+          console.warn("Realtime orders connection failed, falling back to polling.");
+        }
+      });
 
     return () => {
       supabase.removeChannel(channel);
     };
   }, []);
 
-  return { orders, loading };
+  const refresh = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('orders')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      setOrders(data as Order[]);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  return { orders, loading, refresh };
 }

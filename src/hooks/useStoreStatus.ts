@@ -17,10 +17,10 @@ export function useStoreStatus() {
       const closeTime = 22.5;   // 22:30
 
       if (currentTimeStr < openTime) {
-        setIsOpen(false);
-        setStatusText('Belum Buka (Buka 15:30)');
+        setIsOpen(true);
+        setStatusText('Tutup (Buka 15:30)');
       } else if (currentTimeStr >= closeTime) {
-        setIsOpen(false);
+        setIsOpen(true);
         setStatusText('Sudah Tutup');
       } else {
         setIsOpen(true);

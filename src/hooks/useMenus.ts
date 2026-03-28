@@ -45,7 +45,17 @@ export function useMenus() {
             }
           ]);
         } else {
-          setMenus(data as MenuItem[]);
+          const isSaturday = new Date().getDay() === 6;
+          const processedData = (data as MenuItem[]).map(item => {
+            if (item.name.toLowerCase().includes('gulai')) {
+              if (!isSaturday) {
+                return { ...item, stock: 0 };
+              }
+              // On Saturday, return the actual database stock
+            }
+            return item;
+          });
+          setMenus(processedData);
         }
       } catch (err) {
         console.error("Error fetching menus", err);
@@ -58,15 +68,50 @@ export function useMenus() {
 
     // Subscribe to realtime changes
     const channel = supabase.channel('schema-db-changes')
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'menus' }, (payload) => {
-        setMenus(current => current.map(item => item.id === payload.new.id ? payload.new as MenuItem : item));
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'menus' }, (payload) => {
+        const isSaturday = new Date().getDay() === 6;
+
+        if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+          const newItem = payload.new as MenuItem;
+          
+          // Custom logic for Gulai on Saturday
+          if (newItem.name.toLowerCase().includes('gulai')) {
+             if (!isSaturday) {
+               newItem.stock = 0; // Force 0 if not Saturday
+             }
+             // On Saturday, we respect the actual database value (payload.new.stock)
+             // whether it's 20, 10, or 0 (Habis).
+          }
+
+          if (payload.eventType === 'INSERT') {
+            setMenus(current => [...current, newItem]);
+          } else {
+            setMenus(current => current.map(item => item.id === newItem.id ? newItem : item));
+          }
+        } else if (payload.eventType === 'DELETE') {
+          setMenus(current => current.filter(item => item.id === payload.old.id));
+        }
       })
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'CHANNEL_ERROR') {
+          console.warn("Realtime menus connection failed, falling back to polling.");
+        }
+      });
 
     return () => {
       supabase.removeChannel(channel);
     };
   }, []);
 
-  return { menus, loading };
+  const refresh = async () => {
+    try {
+       const { data, error } = await supabase.from('menus').select('*').order('created_at', { ascending: true });
+       if (error) throw error;
+       setMenus(data as MenuItem[]);
+    } catch (err) {
+       console.error(err);
+    }
+  };
+
+  return { menus, loading, refresh };
 }

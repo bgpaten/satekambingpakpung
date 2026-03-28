@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useMenus } from '../hooks/useMenus';
 import { useOrders } from '../hooks/useOrders';
 import type { Order } from '../hooks/useOrders';
@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabase';
 import { Lock, LayoutDashboard, LogOut, Loader2, ClipboardList, Package, CheckCircle2, Circle, Clock, User, Trash2 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { motion } from 'framer-motion';
+import { toast } from 'sonner';
 
 export function AdminDashboard() {
   const [password, setPassword] = useState('');
@@ -13,30 +14,68 @@ export function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<'stok' | 'pesanan'>('pesanan');
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   
-  const { menus, loading: loadingMenus } = useMenus();
-  const { orders, loading: loadingOrders } = useOrders();
+  const { menus, loading: loadingMenus, refresh: refreshMenus } = useMenus();
+  const { orders, loading: loadingOrders, refresh: refreshOrders } = useOrders();
+
+  const handleManualRefresh = async () => {
+    const promise = Promise.all([refreshMenus(), refreshOrders()]);
+    toast.promise(promise, {
+      loading: 'Menyingkronkan data...',
+      success: 'Data berhasil disinkronkan!',
+      error: 'Gagal sinkron data.',
+    });
+  };
+
+  // Notify on new order
+  useEffect(() => {
+    if (!loadingOrders && orders.length > 0) {
+      const latestOrder = orders[0];
+      const isNew = new Date(latestOrder.created_at).getTime() > Date.now() - 10000; // within 10s
+      if (isNew && latestOrder.status === 'pending' && isLoggedIn) {
+        toast.info(`Pesanan baru dari ${latestOrder.customer_name}!`, {
+          description: latestOrder.menu_name || "Cek detail pesanan segera.",
+          duration: 10000,
+        });
+      }
+    }
+  }, [orders.length, isLoggedIn]);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     if (password === '357911') {
       setIsLoggedIn(true);
+      toast.success('Login Berhasil!');
     } else {
-      alert('PIN salah!');
+      toast.error('PIN salah!');
     }
   };
 
   const updateStock = async (id: string, newStock: number) => {
+    const itemToUpdate = menus.find(m => m.id === id);
+    if (!itemToUpdate) return;
+    
+    // Optimistic Update: Update local state immediately
+    // Note: This relies on the table showing 'menus' from useMenus hook. 
+    // Since useMenus state is internal to the hook, we can't easily update it from here without 'refreshMenus'
+    // but we can at least show the success toast sooner.
+    // Actually, I will call refreshMenus immediately after successful update to force UI sync.
+    
     try {
       setUpdatingId(id);
+      const safeStock = Math.max(0, newStock);
       const { error } = await supabase
         .from('menus')
-        .update({ stock: Math.max(0, newStock) })
+        .update({ stock: safeStock })
         .eq('id', id);
 
       if (error) throw error;
-    } catch (err) {
+      
+      // Force UI sync
+      await refreshMenus();
+      toast.success(`Stok ${itemToUpdate.name} diupdate ke ${safeStock}!`);
+    } catch (err: any) {
       console.error("Update failed", err);
-      alert("Gagal update stok.");
+      toast.error(`Gagal update stok: ${err.message || "Pastikan koneksi internet aktif."}`);
     } finally {
       setUpdatingId(null);
     }
@@ -51,7 +90,14 @@ export function AdminDashboard() {
       setUpdatingId(id);
       const { error } = await supabase.from('menus').update({ price: priceVal }).eq('id', id);
       if (error) throw error;
-    } catch (err) { console.error(err); } finally { setUpdatingId(null); }
+      await refreshMenus();
+      toast.success(`Harga ${menus.find(m => m.id === id)?.name} diupdate ke Rp ${priceVal.toLocaleString('id-ID')}`);
+    } catch (err) { 
+      console.error(err); 
+      toast.error("Gagal update harga.");
+    } finally { 
+      setUpdatingId(null); 
+    }
   };
 
   const toggleOrderStatus = async (order: Order) => {
@@ -64,6 +110,8 @@ export function AdminDashboard() {
         .eq('id', order.id);
 
       if (error) throw error;
+      await refreshOrders();
+      toast.success(`Status pesanan ${order.customer_name} diubah ke ${newStatus === 'completed' ? 'Selesai' : 'Pending'}`);
     } catch (err) {
       console.error("Gagal update status pesanan", err);
     } finally {
@@ -72,10 +120,28 @@ export function AdminDashboard() {
   };
 
   const deleteOrder = async (id: string) => {
-    if (!confirm("Hapus data pesanan ini?")) return;
+    if (!window.confirm("Hapus data pesanan ini?")) return;
     try {
-      await supabase.from('orders').delete().eq('id', id);
-    } catch (err) { console.error(err); }
+      setUpdatingId(id);
+      // Using .select() helps verify if something was actually deleted and triggers post-delete checks
+      const { error, count } = await supabase.from('orders').delete().eq('id', id).select();
+      
+      if (error) throw error;
+      
+      // If count is 0, it means RLS might be blocking or row already gone
+      if (!error && (!count || (count as any).length === 0)) {
+        toast.warning("Pesanan tidak ditemukan atau Anda tidak memiliki izin untuk menghapusnya.");
+        return;
+      }
+
+      await refreshOrders();
+      toast.success("Pesanan berhasil dihapus.");
+    } catch (err: any) { 
+      console.error("Delete failed", err); 
+      toast.error(`Gagal menghapus pesanan: ${err.message || "Coba lagi."}`);
+    } finally {
+      setUpdatingId(null);
+    }
   };
 
   if (!isLoggedIn) {
@@ -103,12 +169,25 @@ export function AdminDashboard() {
           <div className="flex items-center gap-3">
             <LayoutDashboard className="text-brand-accent w-8 h-8" />
             <div>
-              <h1 className="text-2xl font-bold">Dashboard Penjual</h1>
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl font-bold">Dashboard Penjual</h1>
+                <div className="flex items-center gap-1.5 px-2 py-0.5 bg-green-500/10 border border-green-500/20 rounded-full">
+                  <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+                  <span className="text-[10px] text-green-500 font-bold uppercase tracking-wider">Realtime</span>
+                </div>
+              </div>
               <p className="text-sm text-gray-400">Kelola menu dan pantau pesanan masuk.</p>
             </div>
           </div>
           
-          <div className="flex bg-brand-dark-card p-1 rounded-xl border border-white/5">
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={handleManualRefresh}
+              className="p-2 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 transition-all text-gray-400 hover:text-white"
+              title="Refresh Manual"
+            >
+              <Clock className="w-5 h-5" />
+            </button>
             <button 
               onClick={() => setActiveTab('pesanan')}
               className={cn("flex items-center gap-2 px-4 py-2 rounded-lg transition-all text-sm font-bold", activeTab === 'pesanan' ? "bg-brand-accent text-brand-dark shadow-lg" : "text-gray-400 hover:text-white")}

@@ -1,59 +1,82 @@
-import { Star } from 'lucide-react';
+import { Star, Quote } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const testimonials = [
   {
     id: 1,
-    name: "Dimas Anggara",
+    name: "Sarjiyanta Suwarno",
     rating: 5,
-    text: "Gila, dagingnya empuk banget dan bumbunya itu lho meresap sampai ke dalam-dalam. Sate ayamnya juga enak parah."
+    role: "Local Guide",
+    text: "Sate nya empuk..... Harga terjangkau...."
   },
   {
     id: 2,
-    name: "Siti Rahma",
+    name: "Suko Prasetyo",
+    role: "Local Guide",
     rating: 5,
-    text: "Gulai kambing hari Rabu itu andalan suami. Suka banget karena kuahnya nggak bikin eneg tapinya gurih banget!"
+    text: "Rasa mantap... Pokonya nagih...."
   },
   {
     id: 3,
-    name: "Wahyu Pratama",
+    name: "A Anton",
+    role: "Pelanggan Setia",
     rating: 5,
-    text: "Praktis banget pesannya lewat web dan langsung WhatsApp. Sampe ambil sana udah disiapin fresh dan anget."
+    text: "Langganan sate kambing"
   }
 ]
 
 export function SocialProof() {
   return (
-    <section className="py-20 bg-gradient-to-b from-brand-dark to-[#0F3520] relative">
-      <div className="container mx-auto px-4 max-w-6xl">
-        <div className="text-center mb-16">
-          <h2 className="text-3xl md:text-5xl font-bold mb-4">Kata Pelanggan Kami</h2>
-          <div className="flex justify-center items-center gap-1">
-            {[...Array(5)].map((_, i) => (
-              <Star key={i} className="w-6 h-6 fill-brand-accent text-brand-accent" />
-            ))}
-            <span className="ml-2 font-bold text-white text-lg">4.7 / 5</span>
+    <section className="py-32 relative bg-brand-dark overflow-hidden">
+      {/* Background Glow */}
+      <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-brand-accent/5 rounded-full blur-[120px] -translate-x-1/2 translate-y-1/2"></div>
+
+      <div className="container mx-auto px-4 max-w-6xl relative z-10">
+        <div className="text-center mb-20">
+          <span className="inline-block px-4 py-1.5 rounded-full bg-brand-accent/10 border border-brand-accent/20 text-brand-accent text-[10px] font-bold uppercase tracking-[0.3em] mb-4">
+            Testimonial
+          </span>
+          <h2 className="text-4xl md:text-5xl font-black text-brand-cream">Apa Kata <span className="text-brand-accent italic">Mereka?</span></h2>
+          <div className="flex justify-center items-center gap-2 mt-6">
+            <div className="flex gap-1">
+              {[...Array(5)].map((_, i) => (
+                <Star key={i} className="w-5 h-5 fill-brand-accent text-brand-accent" />
+              ))}
+            </div>
+            <span className="text-brand-cream/60 font-medium ml-2">4.9 / 5.0 Rating Google</span>
           </div>
-          <p className="text-gray-400 mt-2">Berdasarkan ulasan asli pelanggan di Google Maps.</p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           {testimonials.map((t, i) => (
             <motion.div 
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
+              initial={{ opacity: 0, scale: 0.9 }}
+              whileInView={{ opacity: 1, scale: 1 }}
               viewport={{ once: true }}
-              transition={{ delay: i * 0.2 }}
+              transition={{ delay: i * 0.1 }}
+              whileHover={{ y: -10 }}
               key={t.id} 
-              className="bg-brand-dark-card/50 backdrop-blur-sm border border-white/5 p-8 rounded-2xl flex flex-col"
+              className="group p-8 rounded-[32px] bg-white/[0.03] border border-white/5 hover:border-brand-accent/30 transition-all duration-500 relative"
             >
-              <div className="flex gap-1 mb-4">
-                {[...Array(t.rating)].map((_, i) => (
-                  <Star key={i} className="w-4 h-4 fill-brand-accent text-brand-accent" />
+              <Quote className="absolute top-6 right-8 w-10 h-10 text-white/5 group-hover:text-brand-accent/10 transition-colors" />
+              
+              <div className="flex gap-1 mb-6">
+                {[...Array(t.rating)].map((_, idx) => (
+                  <Star key={idx} className="w-4 h-4 fill-brand-accent text-brand-accent" />
                 ))}
               </div>
-              <p className="text-gray-300 italic mb-6 leading-relaxed flex-grow">"{t.text}"</p>
-              <h4 className="font-bold text-white">- {t.name}</h4>
+
+              <p className="text-brand-cream/70 italic mb-8 leading-relaxed font-light">"{t.text}"</p>
+              
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-brand-accent to-brand-primary flex items-center justify-center text-brand-dark font-black text-lg">
+                  {t.name.charAt(0)}
+                </div>
+                <div>
+                  <h4 className="font-bold text-brand-cream leading-tight">{t.name}</h4>
+                  <p className="text-[10px] uppercase tracking-widest text-brand-accent/60 font-black">{t.role}</p>
+                </div>
+              </div>
             </motion.div>
           ))}
         </div>
