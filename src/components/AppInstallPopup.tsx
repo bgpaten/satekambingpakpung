@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Download, X, Smartphone } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { toast } from 'sonner';
 
 const AppInstallPopup: React.FC = () => {
   const [show, setShow] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [showInstructions, setShowInstructions] = useState(false);
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
 
   useEffect(() => {
     const hasBeenDismissed = localStorage.getItem('install_popup_dismissed');
@@ -47,13 +48,13 @@ const AppInstallPopup: React.FC = () => {
       const { outcome } = await deferredPrompt.userChoice;
       if (outcome === 'accepted') {
         console.log('User accepted the install prompt');
+        handleDismiss();
       }
       setDeferredPrompt(null);
     } else {
-      // Fallback for browsers that don't support beforeinstallprompt or already installed
-      toast.info("Aplikasi siap diinstal melalui menu browser Anda (Add to Home Screen).");
+      // Show instructional view for iOS/Unsupported
+      setShowInstructions(true);
     }
-    handleDismiss();
   };
 
   return (
@@ -82,20 +83,49 @@ const AppInstallPopup: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex gap-3">
-              <button 
-                onClick={handleInstall}
-                className="flex-1 bg-amber-500 hover:bg-amber-600 text-black font-bold py-3 rounded-xl flex items-center justify-center gap-2 transition-all"
-              >
-                <Download className="w-4 h-4" /> Instal Sekarang
-              </button>
-              <button 
-                onClick={handleDismiss}
-                className="px-6 py-3 rounded-xl border border-white/10 text-white font-medium hover:bg-white/5 transition-all text-sm"
-              >
-                Nanti
-              </button>
-            </div>
+            {showInstructions ? (
+              <div className="space-y-4">
+                <div className="bg-white/5 p-4 rounded-2xl border border-white/5 space-y-3">
+                  <p className="text-sm text-gray-300">
+                    Browser Anda tidak mendukung instalasi otomatis. Silakan instal secara manual:
+                  </p>
+                  <ol className="text-sm text-gray-400 space-y-2 list-decimal list-inside">
+                    {isIOS ? (
+                      <>
+                        <li>Klik ikon <span className="text-blue-400 font-bold">Bagikan/Share</span> di bar bawah (kotak dengan panah)</li>
+                        <li>Gulir ke bawah dan klik <span className="text-white font-bold">"Add to Home Screen"</span></li>
+                      </>
+                    ) : (
+                      <>
+                        <li>Klik ikon <span className="text-white font-bold">Titik Tiga</span> di pojok browser</li>
+                        <li>Pilih <span className="text-white font-bold">"Instal Aplikasi"</span> atau <span className="text-white font-bold">"Tambahkan ke Layar Utama"</span></li>
+                      </>
+                    )}
+                  </ol>
+                </div>
+                <button 
+                  onClick={handleDismiss}
+                  className="w-full py-3 rounded-xl bg-white/10 text-white font-bold hover:bg-white/20 transition-all"
+                >
+                  Saya Mengerti
+                </button>
+              </div>
+            ) : (
+              <div className="flex gap-3">
+                <button 
+                  onClick={handleInstall}
+                  className="flex-1 bg-amber-500 hover:bg-amber-600 text-black font-bold py-3 rounded-xl flex items-center justify-center gap-2 transition-all"
+                >
+                  <Download className="w-4 h-4" /> Instal Sekarang
+                </button>
+                <button 
+                  onClick={handleDismiss}
+                  className="px-6 py-3 rounded-xl border border-white/10 text-white font-medium hover:bg-white/5 transition-all text-sm"
+                >
+                  Nanti
+                </button>
+              </div>
+            )}
           </div>
         </motion.div>
       )}
