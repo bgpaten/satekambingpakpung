@@ -7,6 +7,7 @@ import AboutUs from './components/AboutUs';
 import TermsSection from './components/TermsSection';
 import OrderModal from './components/OrderModal';
 import AppInstallPopup from './components/AppInstallPopup';
+import { AnnouncementBanner } from './components/AnnouncementBanner';
 import { Toaster } from 'sonner';
 
 function App() {
@@ -30,6 +31,7 @@ function App() {
       <Toaster position="top-center" richColors />
       {/* Global Grain Texture Overlay */}
       <div className="fixed inset-0 pointer-events-none z-[9999] grain-overlay opacity-10"></div>
+      <AnnouncementBanner />
       
       {isAdmin ? (
         <AdminDashboard />

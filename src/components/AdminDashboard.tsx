@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useMenus } from '../hooks/useMenus';
 import { useOrders } from '../hooks/useOrders';
 import type { Order } from '../hooks/useOrders';
+import { useAnnouncements } from '../hooks/useAnnouncements';
 import { supabase } from '../lib/supabase';
-import { Lock, LayoutDashboard, LogOut, Loader2, ClipboardList, Package, CheckCircle2, Circle, Clock, User, Trash2 } from 'lucide-react';
+import { Lock, LayoutDashboard, LogOut, Loader2, ClipboardList, Package, CheckCircle2, Circle, Clock, User, Trash2, Volume2, Plus, Save } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
@@ -11,14 +12,22 @@ import { toast } from 'sonner';
 export function AdminDashboard() {
   const [password, setPassword] = useState('');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [activeTab, setActiveTab] = useState<'stok' | 'pesanan'>('pesanan');
+  const [activeTab, setActiveTab] = useState<'stok' | 'pesanan' | 'pengumuman'>('pesanan');
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  
+  // Announcement form states
+  const [annType, setAnnType] = useState<'holiday' | 'event'>('event');
+  const [annTitle, setAnnTitle] = useState('');
+  const [annDesc, setAnnDesc] = useState('');
+  const [annDate, setAnnDate] = useState('');
+  const [annTime, setAnnTime] = useState('');
   
   const { menus, loading: loadingMenus, refresh: refreshMenus } = useMenus();
   const { orders, loading: loadingOrders, refresh: refreshOrders } = useOrders();
+  const { announcements, loading: loadingAnns, refresh: refreshAnns } = useAnnouncements();
 
   const handleManualRefresh = async () => {
-    const promise = Promise.all([refreshMenus(), refreshOrders()]);
+    const promise = Promise.all([refreshMenus(), refreshOrders(), refreshAnns()]);
     toast.promise(promise, {
       loading: 'Menyingkronkan data...',
       success: 'Data berhasil disinkronkan!',
@@ -144,6 +153,70 @@ export function AdminDashboard() {
     }
   };
 
+  const handleSaveAnnouncement = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!annTitle) return;
+    
+    let end_time = null;
+    if (annDate && annTime) {
+      end_time = new Date(`${annDate}T${annTime}`).toISOString();
+    } else if (annDate) {
+      end_time = new Date(`${annDate}T23:59:59`).toISOString();
+    }
+
+    try {
+      setUpdatingId('new-ann');
+      const { error } = await supabase.from('announcements').insert([{
+        type: annType,
+        title: annTitle,
+        description: annDesc,
+        end_time,
+        is_active: true
+      }]);
+
+      if (error) throw error;
+      
+      toast.success('Pengumuman berhasil ditambahkan');
+      setAnnTitle(''); setAnnDesc(''); setAnnDate(''); setAnnTime('');
+      await refreshAnns();
+    } catch (err: any) {
+      console.error(err);
+      toast.error(`Gagal menyimpan pengumuman: ${err.message}`);
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  const handleToggleAnnouncement = async (id: string, currentStatus: boolean) => {
+    try {
+      setUpdatingId(id);
+      const { error } = await supabase.from('announcements').update({ is_active: !currentStatus }).eq('id', id);
+      if (error) throw error;
+      await refreshAnns();
+    } catch (err) {
+      console.error(err);
+      toast.error('Gagal update status pengumuman');
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  const handleDeleteAnnouncement = async (id: string) => {
+    if (!window.confirm("Hapus pengumuman ini?")) return;
+    try {
+      setUpdatingId(id);
+      const { error } = await supabase.from('announcements').delete().eq('id', id);
+      if (error) throw error;
+      toast.success('Pengumuman dihapus');
+      await refreshAnns();
+    } catch (err) {
+      console.error(err);
+      toast.error('Gagal menghapus pengumuman');
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
   if (!isLoggedIn) {
     return (
       <div className="min-h-screen bg-brand-dark flex items-center justify-center p-4">
@@ -202,6 +275,21 @@ export function AdminDashboard() {
               <Package className="w-4 h-4" />
               Stok Menu
             </button>
+            <button 
+              onClick={() => setActiveTab('pengumuman')}
+              className={cn("flex items-center gap-2 px-4 py-2 rounded-lg transition-all text-sm font-bold hidden md:flex", activeTab === 'pengumuman' ? "bg-brand-accent text-brand-dark shadow-lg" : "text-gray-400 hover:text-white")}
+            >
+              <Volume2 className="w-4 h-4" />
+              Pengumuman
+            </button>
+            
+            {/* Mobile icon-only tab for pengumuman */}
+            <button 
+              onClick={() => setActiveTab('pengumuman')}
+              className={cn("flex md:hidden items-center justify-center p-2 rounded-lg transition-all text-sm font-bold", activeTab === 'pengumuman' ? "bg-brand-accent text-brand-dark shadow-lg" : "text-gray-400 hover:text-white bg-white/5 border border-white/10")}
+            >
+              <Volume2 className="w-5 h-5" />
+            </button>
           </div>
 
           <button onClick={() => setIsLoggedIn(false)} className="flex items-center gap-2 px-4 py-2 bg-red-500/10 text-red-400 border border-red-500/20 rounded-lg hover:bg-red-500/20 transition-all font-medium text-sm">
@@ -237,7 +325,7 @@ export function AdminDashboard() {
                 </motion.div>
               ))}
             </div>
-          ) : (
+          ) : activeTab === 'pesanan' ? (
             <div className="space-y-4">
               <div className="flex justify-between items-center mb-6">
                 <h3 className="text-xl font-bold border-l-4 border-brand-accent pl-4">Pesanan Masuk</h3>
@@ -312,7 +400,82 @@ export function AdminDashboard() {
                 </div>
               )}
             </div>
-          )}
+          ) : activeTab === 'pengumuman' ? (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="lg:col-span-1 space-y-6">
+                <div className="bg-brand-dark-card border border-white/10 rounded-2xl p-6">
+                  <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+                    <Plus className="w-5 h-5 text-brand-accent" /> Tambah Pengumuman
+                  </h3>
+                  <form onSubmit={handleSaveAnnouncement} className="space-y-4">
+                    <div>
+                      <label className="text-xs text-gray-400 font-bold uppercase mb-1 block">Tipe</label>
+                      <div className="flex bg-brand-dark rounded-lg p-1 border border-white/10">
+                        <button type="button" onClick={() => setAnnType('event')} className={cn("flex-1 py-1.5 text-xs font-bold rounded-md transition-all", annType === 'event' ? "bg-brand-accent text-brand-dark" : "text-gray-400 hover:text-white")} >Event / Promo</button>
+                        <button type="button" onClick={() => setAnnType('holiday')} className={cn("flex-1 py-1.5 text-xs font-bold rounded-md transition-all", annType === 'holiday' ? "bg-red-500 text-white" : "text-gray-400 hover:text-white")} >Libur / Tutup</button>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-400 font-bold uppercase mb-1 block">Judul Singkat</label>
+                      <input type="text" required value={annTitle} onChange={e=>setAnnTitle(e.target.value)} placeholder="Contoh: Diskon 10% / Toko Libur" className="w-full bg-brand-dark/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-accent" />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-400 font-bold uppercase mb-1 block">Deskripsi Detail</label>
+                      <textarea value={annDesc} onChange={e=>setAnnDesc(e.target.value)} placeholder="Deskripsi pengumuman..." rows={3} className="w-full bg-brand-dark/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-accent resize-none"></textarea>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                       <div>
+                         <label className="text-xs text-gray-400 font-bold uppercase mb-1 block">Tgl Berakhir</label>
+                         <input type="date" value={annDate} onChange={e=>setAnnDate(e.target.value)} className="w-full bg-brand-dark/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-accent [color-scheme:dark]" />
+                       </div>
+                       <div>
+                         <label className="text-xs text-gray-400 font-bold uppercase mb-1 block">Jam (Opsional)</label>
+                         <input type="time" value={annTime} onChange={e=>setAnnTime(e.target.value)} className="w-full bg-brand-dark/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-accent [color-scheme:dark]" />
+                       </div>
+                    </div>
+                    <button type="submit" disabled={updatingId === 'new-ann'} className="w-full bg-brand-accent hover:bg-brand-accent/90 text-brand-dark font-bold py-2.5 rounded-lg transition-all flex items-center justify-center gap-2">
+                      {updatingId === 'new-ann' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Simpan
+                    </button>
+                  </form>
+                </div>
+              </div>
+
+              <div className="lg:col-span-2 space-y-4">
+                <h3 className="text-xl font-bold border-l-4 border-brand-accent pl-4">Daftar Pengumuman</h3>
+                {loadingAnns ? <Loader2 className="w-8 h-8 animate-spin text-brand-accent mx-auto mt-10" /> : announcements.length === 0 ? <p className="text-gray-500 py-10 text-center border border-dashed border-white/10 rounded-2xl">Belum ada pengumuman.</p> : (
+                  <div className="grid grid-cols-1 gap-3">
+                    {announcements.map((ann) => (
+                      <div key={ann.id} className={cn("p-4 rounded-xl border flex flex-col md:flex-row gap-4 items-start md:items-center justify-between", ann.is_active ? "bg-white/5 border-white/10" : "bg-black/20 border-white/5 opacity-60")}>
+                         <div className="flex items-start gap-3">
+                            <div className={cn("p-2 rounded-lg mt-1", ann.type==='holiday' ? "bg-red-500/20 text-red-500" : "bg-brand-accent/20 text-brand-accent")}>
+                               <Volume2 className="w-5 h-5" />
+                            </div>
+                            <div>
+                               <div className="flex items-center gap-2 mb-1">
+                                 <h4 className={cn("font-bold", !ann.is_active && "text-gray-400 line-through")}>{ann.title}</h4>
+                                 <span className={cn("text-[10px] px-2 py-0.5 rounded font-bold uppercase", ann.type==='holiday' ? "bg-red-500/20 text-red-400" : "bg-brand-accent/20 text-brand-accent")}>{ann.type}</span>
+                               </div>
+                               <p className="text-sm text-gray-400 mb-2">{ann.description}</p>
+                               {ann.end_time && (
+                                 <p className="text-xs font-mono text-brand-accent/70 bg-brand-accent/10 inline-block px-2 py-0.5 rounded">Berakhir: {new Date(ann.end_time).toLocaleString('id-ID')}</p>
+                               )}
+                            </div>
+                         </div>
+                         <div className="flex items-center gap-2 w-full md:w-auto shrink-0 border-t border-white/10 md:border-t-0 pt-3 md:pt-0">
+                            <button onClick={() => handleToggleAnnouncement(ann.id, ann.is_active)} className={cn("flex-1 md:flex-none px-3 py-1.5 text-xs font-bold rounded border transition-all", ann.is_active ? "bg-gray-600/20 text-gray-400 hover:text-white border-gray-600/40" : "bg-green-500/20 text-green-500 hover:bg-green-500/30 border-green-500/30")}>
+                               {ann.is_active ? "Nonaktifkan" : "Aktifkan"}
+                            </button>
+                            <button onClick={() => handleDeleteAnnouncement(ann.id)} className="p-1.5 text-gray-500 hover:text-red-500 hover:bg-red-500/10 rounded transition-all">
+                               <Trash2 className="w-4 h-4" />
+                            </button>
+                         </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : null}
         </main>
 
         <footer className="mt-16 text-center text-gray-500 text-xs">
